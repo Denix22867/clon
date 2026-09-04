@@ -100,6 +100,56 @@ button.mbtn:hover { background:rgba(200,112,60,.22); border-color:#c8703c; lette
 #stats { margin-top:22px; display:grid; grid-template-columns:repeat(3,150px); gap:16px 10px; text-align:center; }
 #stats .st b { display:block; font-size:28px; font-weight:700; color:#e8dcc0; }
 #stats .st span { font-size:10px; letter-spacing:3px; opacity:.45; }
+/* ==================== СЕНСОРНОЕ УПРАВЛЕНИЕ (ТЕЛЕФОН/ПЛАНШЕТ) ==================== */
+#touch { position:absolute; inset:0; z-index:20; display:none; touch-action:none; -webkit-user-select:none; }
+body.touch #touch.on { display:block; }
+#tLook { position:absolute; inset:0; pointer-events:auto; touch-action:none; }
+#tMove { position:absolute; left:0; bottom:0; width:46%; height:64%; pointer-events:auto; touch-action:none; }
+#tStick { position:absolute; width:152px; height:152px; margin:-76px 0 0 -76px; border-radius:50%;
+  border:2px solid rgba(232,226,212,.25); opacity:0; transition:opacity .12s; pointer-events:none; }
+#tStick i { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:50%;
+  background:rgba(232,226,212,.20); border:1px solid rgba(232,226,212,.45); }
+.tBtn { position:absolute; pointer-events:auto; touch-action:none; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; border:1px solid rgba(232,226,212,.28); background:rgba(18,17,15,.34);
+  color:#e8e2d4; font-size:12px; letter-spacing:1px; text-align:center; line-height:1.1;
+  text-shadow:0 1px 4px #000; -webkit-tap-highlight-color:transparent; }
+.tBtn.on { background:rgba(200,112,60,.5); border-color:#e0b055; color:#fff; }
+#tFire { right:22px; bottom:112px; width:106px; height:106px; font-size:13px; }
+#tAds { right:142px; bottom:196px; width:76px; height:76px; }
+#tReload { right:34px; bottom:236px; width:72px; height:72px; }
+#tJump { right:152px; bottom:100px; width:74px; height:74px; }
+#tCrouch { right:26px; bottom:22px; width:72px; height:72px; }
+#tSprint { left:22px; bottom:22px; width:72px; height:72px; }
+#tPause { left:118px; top:10px; right:auto; width:44px; height:44px; font-size:15px; }
+@media (max-height: 440px) {
+  #tFire { width:92px; height:92px; right:18px; bottom:92px; font-size:12px; }
+  #tAds { width:66px; height:66px; right:120px; bottom:164px; font-size:11px; }
+  #tReload { width:62px; height:62px; right:26px; bottom:196px; }
+  #tJump { width:64px; height:64px; right:128px; bottom:82px; font-size:11px; }
+  #tCrouch { width:62px; height:62px; bottom:18px; right:20px; font-size:11px; }
+  #tSprint { width:62px; height:62px; bottom:18px; left:18px; font-size:11px; }
+  #tGuns .tBtn { width:46px; height:46px; font-size:10px; }
+  body.touch #healthPanel { bottom:12px; left:92px; width:180px; }
+  body.touch #hpValue { font-size:26px; }
+  body.touch #ammoMag { font-size:28px; }
+}
+#tGuns { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:10px; }
+#tGuns .tBtn { position:relative; right:auto; bottom:auto; width:54px; height:54px; font-size:11px; }
+/* перекладка HUD под сенсорный режим */
+body.touch #ammoPanel { bottom:auto; top:12px; right:14px; }
+body.touch #weaponSlots { display:none; }
+body.touch #healthPanel { bottom:16px; left:108px; width:210px; }
+body.touch #hpValue { font-size:32px; }
+body.touch #ammoMag { font-size:34px; }
+body.touch #scorePanel { top:12px; left:14px; }
+body.touch #score { font-size:20px; }
+body.touch #killfeed { top:74px; left:14px; width:210px; font-size:11px; }
+body.touch .helpCols { display:none; }
+#touchHelp { display:none; margin-top:22px; font-size:11px; letter-spacing:1px; opacity:.55; line-height:2; text-align:center; }
+body.touch #touchHelp { display:block; }
+#rotate { position:absolute; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
+  background:#0a0a0c; font-size:13px; letter-spacing:5px; text-align:center; padding:30px; }
+@media (orientation:portrait) { body.touch #rotate { display:flex; } }
 #loader { position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:#0a0a0c;
   font-size:12px; letter-spacing:8px; opacity:.7; }
 </style>
@@ -168,6 +218,12 @@ button.mbtn:hover { background:rgba(200,112,60,.22); border-color:#c8703c; lette
       <div class="setRow"><span>ТЕНИ</span><input type="checkbox" id="setShadows" checked></div>
       <div class="setRow"><span>ИНВЕРСИЯ ВЗГЛЯДА ПО Y</span><input type="checkbox" id="setInvert"></div>
     </div>
+    <div id="touchHelp">
+      <span class="k">СТИК</span> слева — движение &nbsp;·&nbsp; <span class="k">СВАЙП</span> справа — обзор<br>
+      <span class="k">ОГОНЬ</span> · <span class="k">ПРИЦЕЛ</span> · <span class="k">R</span> перезарядка ·
+      <span class="k">ПРЫЖОК</span> · <span class="k">СЕСТЬ</span> · <span class="k">БЕГ</span><br>
+      <span class="k">АК / ДР / ПМ</span> внизу — смена оружия &nbsp;·&nbsp; <span class="k">II</span> — пауза
+    </div>
     <div class="helpCols">
       <div>
         <span class="k">WASD</span> движение<br>
@@ -218,6 +274,25 @@ button.mbtn:hover { background:rgba(200,112,60,.22); border-color:#c8703c; lette
   </div>
 </div>
 
+<!-- ==================== СЕНСОРНОЕ УПРАВЛЕНИЕ ==================== -->
+<div id="touch">
+  <div id="tLook"></div>
+  <div id="tMove"><div id="tStick"><i></i></div></div>
+  <div class="tBtn" id="tFire">ОГОНЬ</div>
+  <div class="tBtn" id="tAds">ПРИЦЕЛ</div>
+  <div class="tBtn" id="tReload">R</div>
+  <div class="tBtn" id="tJump">ПРЫЖОК</div>
+  <div class="tBtn" id="tCrouch">СЕСТЬ</div>
+  <div class="tBtn" id="tSprint">БЕГ</div>
+  <div class="tBtn" id="tPause">II</div>
+  <div id="tGuns">
+    <div class="tBtn" id="tGun0">АК</div>
+    <div class="tBtn" id="tGun1">ДР</div>
+    <div class="tBtn" id="tGun2">ПМ</div>
+  </div>
+</div>
+<div id="rotate">ПОВЕРНИТЕ УСТРОЙСТВО<br>ГОРИЗОНТАЛЬНО</div>
+
 <div id="loader">ЗАГРУЗКА СЕКТОРА...</div>
 
 <script type="importmap">
@@ -257,7 +332,7 @@ const CONFIG = {
   },
   // ---------- камера ----------
   camera: {
-    sensitivity: 0.0021, adsSensMul: 0.62, adsTime: 0.15,
+    sensitivity: 0.0021, touchSensitivity: 0.0042, adsSensMul: 0.62, adsTime: 0.15,
     maxPitch: Math.PI / 2 - 0.02,
     recoilRecovery: 7.5,     // скорость возврата отдачи камеры
     shakeDecay: 6.0
@@ -3462,12 +3537,17 @@ class Player {
 
     // ---------- направление желаемого движения ----------
     let fx = 0, fz = 0;
-    if (input.fwd) fz += 1;
-    if (input.back) fz -= 1;
-    if (input.right) fx += 1;
-    if (input.left) fx -= 1;
+    if (input.analog && (input.analog.x !== 0 || input.analog.y !== 0)) {
+      // виртуальный стик (сенсорное управление) — аналоговый вектор
+      fx = input.analog.x; fz = input.analog.y;
+    } else {
+      if (input.fwd) fz += 1;
+      if (input.back) fz -= 1;
+      if (input.right) fx += 1;
+      if (input.left) fx -= 1;
+    }
     const len = Math.hypot(fx, fz);
-    if (len > 0) { fx /= len; fz /= len; }
+    if (len > 1) { fx /= len; fz /= len; }
 
     // спринт: только вперёд, при наличии выносливости, не в приседе и не в ADS
     const wantSprint = input.sprint && fz > 0.3 && !this.crouching && !input.ads && this.stamina > 0.1;
@@ -3491,8 +3571,9 @@ class Player {
     this.vel.x += wishX * speed * accel * dt;
     this.vel.z += wishZ * speed * accel * dt;
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    if (hs > speed) { const k = speed / hs; this.vel.x *= k; this.vel.z *= k; }
-    if (len === 0) {
+    const maxSpeed = speed * (len > 0.001 ? Math.min(1, len) : 1);
+    if (hs > maxSpeed) { const k = maxSpeed / hs; this.vel.x *= k; this.vel.z *= k; }
+    if (len < 0.001) {
       const f = this.grounded ? P.friction : P.airFriction;
       const drop = 1 - Math.min(1, f * dt);
       this.vel.x *= drop; this.vel.z *= drop;
@@ -3592,7 +3673,11 @@ class HUD {
     this.chSpread = 8;
   }
 
-  show(v) { this.el.hud.classList.toggle('hidden', !v); }
+  show(v) {
+    this.el.hud.classList.toggle('hidden', !v);
+    const t = document.getElementById('touch');
+    if (t) t.classList.toggle('on', v);
+  }
 
   /* ---------- прицел: расходится при движении и стрельбе ---------- */
   updateCrosshair(spreadRad, ads) {
@@ -3736,6 +3821,9 @@ class Game {
     this.tf = new TextureFactory();
     this.audio = new AudioManager();
     this.settings = { sens: 1.0, volume: 0.6, shadows: true, invertY: false };
+    // сенсорный режим (телефон/планшет): другое управление и раскладка HUD
+    this.isTouch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+    document.body.classList.toggle('touch', this.isTouch);
 
     this._initRenderer();
     this._initScene();
@@ -3744,6 +3832,7 @@ class Game {
     this._initEnemies();
     this._initPickups();
     this._initInput();
+    this._initTouch();
 
     this.hud = new HUD(this);
 
@@ -3991,9 +4080,11 @@ class Game {
     });
 
     document.addEventListener('pointerlockchange', () => {
+      if (this.isTouch) return;
       if (document.pointerLockElement !== canvas && this.state === 'playing') this.pause();
     });
     canvas.addEventListener('click', () => {
+      if (this.isTouch) return;
       if (this.state === 'playing' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
     });
   }
@@ -4007,6 +4098,110 @@ class Game {
     i.jump = !!k['Space'];
     i.sprint = !!(k['ShiftLeft'] || k['ShiftRight']);
     i.crouch = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC']);
+  }
+
+  /* =======================================================================
+     СЕНСОРНОЕ УПРАВЛЕНИЕ: виртуальный стик, обзор свайпом, кнопки действий
+     ======================================================================= */
+  _initTouch() {
+    if (!this.isTouch) return;
+    const $ = (id) => document.getElementById(id);
+    const T = this.touch = { moveId: -1, lookId: -1, ox: 0, oy: 0, lx: 0, ly: 0, analog: { x: 0, y: 0 } };
+    this.input.analog = T.analog;
+
+    // страховка от масштабирования и прокрутки страницы пальцем
+    document.addEventListener('gesturestart', e => e.preventDefault());
+    document.addEventListener('touchmove', e => { if (this.state === 'playing') e.preventDefault(); }, { passive: false });
+
+    // ---------- левая зона: виртуальный стик движения ----------
+    const zone = $('tMove'), stick = $('tStick'), knob = stick.firstElementChild;
+    const R = 62;                       // радиус отклонения стика в пикселях
+    zone.addEventListener('pointerdown', (e) => {
+      if (T.moveId !== -1) return;
+      T.moveId = e.pointerId; T.ox = e.clientX; T.oy = e.clientY;
+      stick.style.left = e.clientX + 'px';
+      stick.style.top = e.clientY + 'px';
+      stick.style.opacity = '1';
+      knob.style.transform = 'none';
+      try { zone.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== T.moveId) return;
+      let dx = e.clientX - T.ox, dy = e.clientY - T.oy;
+      const d = Math.hypot(dx, dy);
+      if (d > R) { dx *= R / d; dy *= R / d; }
+      T.analog.x = dx / R;
+      T.analog.y = -dy / R;             // вверх по экрану = вперёд
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    });
+    const moveEnd = (e) => {
+      if (e.pointerId !== T.moveId) return;
+      T.moveId = -1; T.analog.x = 0; T.analog.y = 0;
+      stick.style.opacity = '0'; knob.style.transform = 'none';
+    };
+    zone.addEventListener('pointerup', moveEnd);
+    zone.addEventListener('pointercancel', moveEnd);
+
+    // ---------- правая зона: обзор свайпом ----------
+    const look = $('tLook');
+    look.addEventListener('pointerdown', (e) => {
+      if (T.lookId !== -1) return;
+      T.lookId = e.pointerId; T.lx = e.clientX; T.ly = e.clientY;
+      try { look.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    look.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== T.lookId || this.state !== 'playing') return;
+      const s = CONFIG.camera.touchSensitivity * this.settings.sens *
+        (this.input.ads ? CONFIG.camera.adsSensMul : 1);
+      this.player.yaw -= (e.clientX - T.lx) * s;
+      this.player.pitch -= (e.clientY - T.ly) * s * (this.settings.invertY ? -1 : 1);
+      this.player.pitch = clamp(this.player.pitch, -CONFIG.camera.maxPitch, CONFIG.camera.maxPitch);
+      T.lx = e.clientX; T.ly = e.clientY;
+    });
+    const lookEnd = (e) => { if (e.pointerId === T.lookId) T.lookId = -1; };
+    look.addEventListener('pointerup', lookEnd);
+    look.addEventListener('pointercancel', lookEnd);
+
+    // ---------- кнопки ----------
+    const hold = (id, down, up) => {
+      const el = $(id);
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); el.classList.add('on');
+        try { el.setPointerCapture(e.pointerId); } catch (err) {}
+        down();
+      });
+      const off = () => { el.classList.remove('on'); if (up) up(); };
+      el.addEventListener('pointerup', off);
+      el.addEventListener('pointercancel', off);
+    };
+    const toggle = (id, fn) => {
+      const el = $(id);
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const on = !el.classList.contains('on');
+        el.classList.toggle('on', on);
+        fn(on);
+      });
+    };
+    const tap = (id, fn) => {
+      const el = $(id);
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); fn();
+        el.classList.add('on');
+        setTimeout(() => el.classList.remove('on'), 130);
+      });
+    };
+
+    hold('tFire', () => { this.input.fire = true; }, () => { this.input.fire = false; });
+    hold('tJump', () => { this.input.jump = true; }, () => { this.input.jump = false; });
+    toggle('tAds', (on) => { this.input.ads = on; });
+    toggle('tCrouch', (on) => { this.input.crouch = on; });
+    toggle('tSprint', (on) => { this.input.sprint = on; });
+    tap('tReload', () => { if (this.state === 'playing') this.weapon.startReload(); });
+    tap('tPause', () => { this.pause(); });
+    for (let i = 0; i < 3; i++) tap('tGun' + i, () => { if (this.state === 'playing') this.switchWeapon(i); });
   }
 
   _onResize() {
@@ -4429,7 +4624,11 @@ class Game {
     this.setScreen(null);
     this.state = 'playing';
     this.clock.getDelta();
-    this.renderer.domElement.requestPointerLock();
+    if (this.isTouch) {
+      // на телефоне вместо Pointer Lock — полноэкранный режим
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    } else this.renderer.domElement.requestPointerLock();
   }
   switchWeaponImmediate(idx) {
     this.weapon.unequip();
@@ -4442,6 +4641,9 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     this.input.fire = false; this.input.ads = false;
+    this.input.jump = false; this.input.sprint = false;
+    if (this.input.analog) { this.input.analog.x = 0; this.input.analog.y = 0; }
+    document.querySelectorAll('#touch .tBtn.on').forEach(b => b.classList.remove('on'));
     this.keys = {}; this._syncInput();
     if (document.pointerLockElement) document.exitPointerLock();
     this.setScreen('pause');
@@ -4452,7 +4654,7 @@ class Game {
     this.state = 'playing';
     this.clock.getDelta();
     this.audio.resume();
-    this.renderer.domElement.requestPointerLock();
+    if (!this.isTouch) this.renderer.domElement.requestPointerLock();
   }
   quitToMenu() {
     this.state = 'menu';
