@@ -1,0 +1,85 @@
+[gd_scene format=4]
+
+[ext_resource type="Texture2D" path="res://assets/models/mining_mining_atlas.png" id="1_oko74"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lx7q1"]
+resource_name = "Mining_Atlas"
+transparency = 4
+cull_mode = 2
+albedo_texture = ExtResource("1_oko74")
+roughness = 0.5
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_ndjpq"]
+_surfaces = [{
+"aabb": AABB(-2.125, 0, 0, 4.25, 3.28, 1e-05),
+"format": 34359742465,
+"index_count": 6,
+"index_data": PackedByteArray("AAABAAIAAAADAAEA"),
+"name": "Mining_Atlas",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("AAAIwAAAAAAAAACAAAAIQIXrUUAAAACAAAAIQAAAAAAAAACAAAAIwIXrUUAAAACA")
+}]
+blend_shape_mode = 0
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_irfva"]
+resource_name = "Iskra_Mining_GoldVein_Mesh"
+_surfaces = [{
+"aabb": AABB(-2.125, 0, 0, 4.25, 3.28, 1e-05),
+"attribute_data": PackedByteArray("AAAMPwAA7D4AAGw/AAAwPgAAbD8AAOw+AAAMPwAAMD4="),
+"format": 34359742487,
+"index_count": 6,
+"index_data": PackedByteArray("AAABAAIAAAADAAEA"),
+"material": SubResource("StandardMaterial3D_lx7q1"),
+"name": "Mining_Atlas",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("AAAIwAAAAAAAAACAAAAIQIXrUUAAAACAAAAIQAAAAAAAAACAAAAIwIXrUUAAAACA/3//f////7//f/9/////v/9//3////+//3//f////78=")
+}]
+blend_shape_mode = 0
+shadow_mesh = SubResource("ArrayMesh_ndjpq")
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_3vfri"]
+_surfaces = [{
+"aabb": AABB(-2.225, 0, 0, 4.45, 3.93, 1e-05),
+"format": 34359742465,
+"index_count": 6,
+"index_data": PackedByteArray("AAABAAIAAAADAAEA"),
+"name": "Mining_Atlas",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("ZmYOwAAAAAAAAACAZmYOQB+Fe0AAAACAZmYOQAAAAAAAAACAZmYOwB+Fe0AAAACA")
+}]
+blend_shape_mode = 0
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_eppyp"]
+resource_name = "Iskra_Mining_Miner_Mesh"
+_surfaces = [{
+"aabb": AABB(-2.225, 0, 0, 4.45, 3.93, 1e-05),
+"attribute_data": PackedByteArray("AACYPQAA7j4AAPI+AADoPQAA8j4AAO4+AACYPQAA6D0="),
+"format": 34359742487,
+"index_count": 6,
+"index_data": PackedByteArray("AAABAAIAAAADAAEA"),
+"material": SubResource("StandardMaterial3D_lx7q1"),
+"name": "Mining_Atlas",
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("ZmYOwAAAAAAAAACAZmYOQB+Fe0AAAACAZmYOQAAAAAAAAACAZmYOwB+Fe0AAAACA/3//f////7//f/9/////v/9//3////+//3//f////78=")
+}]
+blend_shape_mode = 0
+shadow_mesh = SubResource("ArrayMesh_3vfri")
+
+[node name="Iskra_Mining" type="Node3D" unique_id=2028730494]
+
+[node name="GoldVein" type="MeshInstance3D" parent="." unique_id=1405821200]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, -0.22, 0)
+mesh = SubResource("ArrayMesh_irfva")
+
+[node name="Miner" type="MeshInstance3D" parent="." unique_id=586784812]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25, -0.22, 0.25)
+mesh = SubResource("ArrayMesh_eppyp")

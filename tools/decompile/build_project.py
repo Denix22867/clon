@@ -109,8 +109,9 @@ def main(src, dst):
             elif res.endswith('.ttf'):
                 write(os.path.join(dst, res), assets.ttf_from(assets.rscc(data)))
             elif res.endswith('.glb'):
-                # Импортированная сцена модели: распакованный бинарный ресурс (.scn).
-                write(os.path.join(dst, res[:-4] + '.scn'), b'RSRC' + assets.rscc(data))
+                # Импортированная сцена модели: исходный сжатый бинарный ресурс (RSCC) Godot читает как .scn.
+                # В репозитории она пересохранена в текстовый .tscn самим Godot (см. README).
+                write(os.path.join(dst, res[:-4] + '.scn'), data)
             elif res == 'assets/icon.svg':
                 pass  # исходный svg лежит рядом и уже скопирован
             else:

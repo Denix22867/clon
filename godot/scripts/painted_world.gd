@@ -50,8 +50,8 @@ func attach(parent: Control, size: Vector2, top: float, factor: float, _hero_tex
 	actor_layer = parent; view_size = size; scale_factor = factor
 	view = SubViewport.new(); root.add_child(view); view.size = Vector2i(int(size.x * factor), int(size.y * factor)); view.transparent_bg = true
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS; view.own_world_3d = true
-	scene = load("res://assets/models/painted_battle.scn").instantiate(); view.add_child(scene)
-	var mining_scene = load("res://assets/models/mining.scn").instantiate(); scene.add_child(mining_scene)
+	scene = load("res://assets/models/painted_battle.tscn").instantiate(); view.add_child(scene)
+	var mining_scene = load("res://assets/models/mining.tscn").instantiate(); scene.add_child(mining_scene)
 	miner = mining_scene.find_child("Miner*", true, false); ore = mining_scene.find_child("GoldVein*", true, false)
 	if miner: miner_base = miner.position
 	if ore: ore_base = ore.position
