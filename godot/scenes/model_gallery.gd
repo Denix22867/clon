@@ -11,8 +11,8 @@ var clock := 0.0
 
 func _ready() -> void:
 	var list := []
-	for i in 7: list.append(["Герой %d" % i, Chars.hero.bind(i), "hero%d" % i])
-	list.append(["Искра (звёздный облик)", Chars.hero.bind(0, true), "hero0_star"])
+	for i in 7: list.append(["Герой %d" % i, Chars.hero.bind(i), "hero%d_false" % i])
+	list.append(["Искра (звёздный облик)", Chars.hero.bind(0, true), "hero0_true"])
 	for i in 8: list.append(["Союзник %d" % i, Chars.ally.bind(i), "ally%d" % i])
 	for i in range(-1, 9): list.append(["Враг %d" % i, Chars.enemy.bind(i), "enemy%d" % i])
 	list.append(["Рудная жила", Chars.ore, "ore"])

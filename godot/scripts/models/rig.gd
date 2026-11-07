@@ -2,7 +2,9 @@ extends RefCounted
 ## Процедурная анимация моделей из characters.gd.
 ## Каждая кость хранит позу покоя (meta rest_position / rest_rotation); здесь к ней добавляются смещения.
 
-const WINDUP := 0.1    # замах
+const Overrides = preload("res://scripts/models/overrides.gd")
+
+const WINDUP := 0.1   # замах
 const STRIKE := 0.17   # момент попадания
 const RECOVER := 0.6   # возврат в стойку
 
@@ -13,6 +15,9 @@ static var _templates := {}
 static func instance(key: String, builder: Callable) -> Node3D:
 	if not _templates.has(key):
 		var built: Node3D = builder.call()
+		var replacement := Overrides.load_override(key, built)
+		if replacement != null:
+			built.free(); built = replacement
 		var names: Array = (built.get_meta("bones") as Dictionary).keys()
 		built.remove_meta("bones")
 		for node in built.find_children("*", "", true, false): node.owner = built
