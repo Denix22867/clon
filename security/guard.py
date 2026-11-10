@@ -14,7 +14,9 @@ guard.py — единый защитный агент для Windows 10/11.
   * паник-клавиша Ctrl+Alt+K закрывает активное полноэкранное окно-пугалку;
   * АДМИНСКИЙ "часовой": ловит полноэкранное безрамочное topmost-окно локера,
     убивает его процесс (с ним спадают хуки/BlockInput) и чистит персистентность
-    (Run в HKCU/HKLM, файлы Startup, задачи schtasks), ссылающуюся на тот же файл.
+    (Run/RunOnce в HKCU/HKLM, файлы Startup, задачи schtasks, все копии файла);
+  * при нейтрализации показывает уведомление Windows и открывает КРАСИВЫЙ
+    HTML-отчёт об инциденте (папка incidents/) с деталями: что убито и вычищено.
 
 Команды:
   python guard.py                 # запустить защиту (+ прописать автозапуск)
@@ -450,15 +452,15 @@ def kill_tree(pid: int) -> None:
 _PATH_RE = re.compile(r'([A-Za-z]:\\[^"\r\n]+?\.exe)', re.IGNORECASE)
 
 
-def purge_persistence(image_path: str) -> None:
+def purge_persistence(image_path: str) -> dict:
     """Чистит ВСЮ персистентность по имени файла локера: Run/RunOnce (HKCU+HKLM),
     Startup, задачи schtasks — и находит/удаляет ВТОРУЮ копию (напр. в Roaming),
-    затем убивает все запущенные копии по имени процесса."""
+    затем убивает все запущенные копии по имени процесса.
+    Возвращает словарь выполненных действий для отчёта об инциденте."""
+    acts = {"run": [], "startup": [], "tasks": [], "files": [], "killed": []}
     if not image_path:
-        return
+        return acts
     base = os.path.basename(os.path.normcase(image_path)).lower()
-    if not base.endswith(".exe"):
-        base += ""  # на всякий случай
     copy_paths = {os.path.normcase(image_path)}  # все известные пути копий
 
     # ключи Run / RunOnce — матчим по ИМЕНИ файла, а не по конкретному пути,
@@ -479,7 +481,9 @@ def purge_persistence(image_path: str) -> None:
                 i += 1
             for name in to_del:
                 winreg.DeleteValue(k, name)
-                log(f"Удалён автозапуск {path.rsplit(chr(92),1)[-1]}: {name}")
+                leaf = path.rsplit(chr(92), 1)[-1]
+                log(f"Удалён автозапуск {leaf}: {name}")
+                acts["run"].append(f"{leaf}: {name}")
             winreg.CloseKey(k)
         except OSError:
             pass
@@ -498,6 +502,7 @@ def purge_persistence(image_path: str) -> None:
                         copy_paths.add(os.path.normcase(m))
                     os.remove(fp)
                     log(f"Удалён файл автозапуска: {fn}")
+                    acts["startup"].append(fn)
             except OSError:
                 pass
     except OSError:
@@ -518,10 +523,12 @@ def purge_persistence(image_path: str) -> None:
                 subprocess.run(["schtasks", "/Delete", "/TN", cur, "/F"],
                                capture_output=True, creationflags=0x08000000)
                 log(f"Удалена задача автозапуска: {cur}")
+                acts["tasks"].append(cur)
 
     # убить ВСЕ запущенные копии по имени процесса (и Temp, и Roaming, и watchdog)
     subprocess.run(["taskkill", "/F", "/T", "/IM", os.path.basename(image_path)],
                    capture_output=True, creationflags=0x08000000)
+    acts["killed"].append(os.path.basename(image_path))
 
     # удалить сами файлы копий (после kill)
     for p in copy_paths:
@@ -530,12 +537,149 @@ def purge_persistence(image_path: str) -> None:
                     os.path.abspath(__file__)):
                 os.remove(p)
                 log(f"Удалён файл локера: {p}")
+                acts["files"].append(p)
                 # попробовать убрать папку-маскировку WindowsUpdateService, если пуста
                 d = os.path.dirname(p)
                 if d.lower().endswith("windowsupdateservice") and not os.listdir(d):
                     os.rmdir(d)
         except OSError:
             pass
+    return acts
+
+
+# =======================================================================
+#  КРАСИВЫЙ ОТЧЁТ ОБ ИНЦИДЕНТЕ + УВЕДОМЛЕНИЕ WINDOWS
+# =======================================================================
+INCIDENTS_DIR = os.path.join(BASE, "incidents")
+
+_REPORT_HTML = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>guard — угроза нейтрализована</title><style>
+:root{{--bg0:#0a0e14;--bg1:#0f1620;--card:#111a24;--line:#1e2d3a;--txt:#e6edf3;
+--dim:#8696a7;--ok:#2ecc71;--accent:#36d399;--chip:#16222e}}
+*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;font-family:"Segoe UI",system-ui,sans-serif;
+color:var(--txt);background:radial-gradient(1200px 600px at 50% -10%,rgba(46,204,113,.14),transparent 60%),
+linear-gradient(160deg,var(--bg0),var(--bg1));display:flex;align-items:center;justify-content:center;padding:24px}}
+.card{{width:100%;max-width:680px;background:linear-gradient(180deg,var(--card),#0e161f);
+border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55)}}
+.top{{padding:34px 34px 10px;text-align:center}}.shield{{width:92px;height:92px;margin:4px auto 16px;
+border-radius:50%;display:flex;align-items:center;justify-content:center;
+background:radial-gradient(circle at 50% 35%,rgba(46,204,113,.28),rgba(46,204,113,.05));
+border:1px solid rgba(46,204,113,.35);animation:pulse 2.4s ease-in-out infinite}}
+@keyframes pulse{{0%,100%{{box-shadow:0 0 0 0 rgba(46,204,113,.35)}}50%{{box-shadow:0 0 0 16px rgba(46,204,113,0)}}}}
+.shield svg{{width:46px;height:46px}}.kicker{{letter-spacing:.22em;font-size:12px;color:var(--ok);
+font-weight:700;text-transform:uppercase}}h1{{margin:6px 0 4px;font-size:26px}}
+.sub{{color:var(--dim);font-size:15px;margin-bottom:22px}}
+.divider{{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent)}}
+.body{{padding:22px 34px 10px}}.grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+@media(max-width:520px){{.grid{{grid-template-columns:1fr}}}}
+.kv{{background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:12px 14px}}
+.kv .k{{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}}
+.kv .v{{font-size:14px;margin-top:4px;word-break:break-all;font-family:ui-monospace,Consolas,monospace}}
+.section{{margin-top:18px}}.section h3{{font-size:13px;text-transform:uppercase;letter-spacing:.12em;
+color:var(--dim);margin:0 0 10px}}.item{{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;
+border:1px solid var(--line);border-radius:10px;background:#0e1822;margin-bottom:8px;font-size:13.5px}}
+.item .dot{{color:var(--ok);flex:0 0 auto;margin-top:1px}}.item code{{font-family:ui-monospace,Consolas,monospace;
+color:#cfe8dc;word-break:break-all}}.footer{{display:flex;justify-content:space-between;align-items:center;
+padding:18px 34px 26px;color:var(--dim);font-size:12.5px}}.badge{{display:inline-flex;align-items:center;gap:7px;
+background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);color:var(--ok);padding:6px 12px;
+border-radius:999px;font-weight:600}}.badge .d{{width:7px;height:7px;border-radius:50%;background:var(--ok);
+box-shadow:0 0 10px var(--ok)}}.brand{{font-weight:700}}.brand span{{color:var(--accent)}}</style></head>
+<body><main class="card"><div class="top"><div class="shield"><svg viewBox="0 0 24 24" fill="none"
+stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+<div class="kicker">Threat neutralized</div><h1>Угроза нейтрализована</h1>
+<div class="sub">guard обнаружил блокировщик экрана, завершил его и восстановил систему</div>
+<span class="badge"><span class="d"></span> Система в безопасности</span></div><div class="divider"></div>
+<div class="body"><div class="grid">
+<div class="kv"><div class="k">Время</div><div class="v">{time}</div></div>
+<div class="kv"><div class="k">Тип угрозы</div><div class="v">{kind}</div></div>
+<div class="kv"><div class="k">Процесс</div><div class="v">{proc}</div></div>
+<div class="kv"><div class="k">PID</div><div class="v">{pid}</div></div>
+<div class="kv" style="grid-column:1/-1"><div class="k">Путь запуска</div><div class="v">{path}</div></div>
+</div><div class="section"><h3>Что сделано</h3>{done}</div>
+<div class="section"><h3>Удалённая персистентность</h3>{persist}</div></div>
+<div class="footer"><div class="brand">guard<span>.</span> защитный агент</div>
+<div>Отчёт об инциденте · {time}</div></div></main></body></html>"""
+
+
+def _esc(s: str) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _items(lines) -> str:
+    if not lines:
+        return '<div class="item"><span class="dot">•</span><div>—</div></div>'
+    return "".join(
+        f'<div class="item"><span class="dot">✔</span><div>{_esc(x)}</div></div>'
+        for x in lines)
+
+
+def build_incident_report(title_proc, pid, path, acts) -> str:
+    """Собирает HTML-отчёт об инциденте, возвращает путь к файлу."""
+    os.makedirs(INCIDENTS_DIR, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    done = [
+        "Завершён процесс локера — хуки клавиатуры/мыши и BlockInput сняты",
+        "Возвращён Диспетчер задач (DisableTaskMgr = 0)",
+    ]
+    for k in acts.get("killed", []):
+        done.append(f"Убиты все копии процесса: {k}")
+    for fpath in acts.get("files", []):
+        done.append(f"Удалён файл локера: {fpath}")
+    persist = []
+    for x in acts.get("run", []):
+        persist.append("Автозапуск реестра — " + x)
+    for x in acts.get("tasks", []):
+        persist.append("Планировщик — задача " + x)
+    for x in acts.get("startup", []):
+        persist.append("Папка Startup — " + x)
+    html = _REPORT_HTML.format(
+        time=_esc(stamp), kind="Screen-locker (блокировщик экрана)",
+        proc=_esc(title_proc), pid=_esc(pid), path=_esc(path),
+        done=_items(done), persist=_items(persist))
+    fn = os.path.join(INCIDENTS_DIR,
+                      "incident_" + time.strftime("%Y%m%d_%H%M%S") + ".html")
+    try:
+        with open(fn, "w", encoding="utf-8") as f:
+            f.write(html)
+    except OSError as e:
+        log("Не удалось записать отчёт: %s" % e)
+    return fn
+
+
+def toast(title: str, text: str) -> None:
+    """Нативное всплывающее уведомление Windows 10/11 (без сторонних модулей)."""
+    ps = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,"
+        "ContentType=WindowsRuntime]>$null;"
+        "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent("
+        "[Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
+        "$n=$t.GetElementsByTagName('text');"
+        f"$n.Item(0).AppendChild($t.CreateTextNode('{title}'))>$null;"
+        f"$n.Item(1).AppendChild($t.CreateTextNode('{text}'))>$null;"
+        "$toast=[Windows.UI.Notifications.ToastNotification]::new($t);"
+        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("
+        "'guard').Show($toast);"
+    )
+    try:
+        subprocess.Popen(["powershell", "-NoProfile", "-Command", ps],
+                         creationflags=0x08000000)
+    except Exception:
+        pass
+
+
+def notify_neutralized(proc, pid, path, acts) -> None:
+    """Формирует отчёт, показывает уведомление и открывает отчёт."""
+    report = build_incident_report(proc, pid, path, acts)
+    toast("guard: угроза нейтрализована",
+          f"Блокировщик {proc} остановлен, система восстановлена.")
+    try:
+        os.startfile(report)   # откроет красивый отчёт в браузере
+    except Exception:
+        pass
+    log("Отчёт об инциденте: " + report)
 
 
 # =======================================================================
@@ -590,12 +734,16 @@ def main_loop() -> None:
                 for hwnd, pid, img in wins:
                     if is_admin():
                         log(f"ЛОКЕР: pid={pid} image='{img}' — чищу автозапуск и убиваю.")
-                        purge_persistence(img)
+                        acts = purge_persistence(img)
                         kill_tree(pid)
+                        proc = os.path.basename(img) if img else (_title(hwnd) or "неизвестно")
+                        notify_neutralized(proc, pid, img or "неизвестно", acts)
                     else:
                         log(f"Подозрительное полноэкранное окно pid={pid} '{_title(hwnd)}' "
                             f"— без админа только закрываю. Нажми Ctrl+Alt+K.")
                         user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                        toast("guard: обнаружен локер",
+                              "Полноэкранное окно закрыто. Для полной очистки запусти guard от администратора.")
             elif tampered:
                 log("Подделка политик обнаружена — возвращено в 0.")
 
