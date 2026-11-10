@@ -1,18 +1,18 @@
 <#
-    build.ps1 — сборка guard.py в один файл guard.exe (Windows).
-    Запускать в PowerShell НА WINDOWS (там, где установлен Python 3).
+    build.ps1 - build guard.py into a single guard.exe (Windows).
+    Run in PowerShell ON WINDOWS (where Python 3 is installed).
 
-    Что делает:
-      1) ставит pyinstaller (если нет);
-      2) собирает guard.exe в папку dist\ одним файлом;
-      3) exe при запуске сам запрашивает права администратора (манифест UAC).
+    Steps:
+      1) installs pyinstaller if missing;
+      2) builds dist\guard.exe as one file;
+      3) the exe requests admin rights on launch (UAC manifest).
 
-    Использование:
-      .\build.ps1                 # обычная сборка (с консолью для логов)
-      .\build.ps1 -NoConsole      # без консольного окна (тихий фон)
-      .\build.ps1 -Icon guard.ico # со своей иконкой
+    Usage:
+      .\build.ps1                 # normal build (with console for logs)
+      .\build.ps1 -NoConsole      # no console window (silent background)
+      .\build.ps1 -Icon guard.ico # custom icon
 
-    Результат: dist\guard.exe
+    Output: dist\guard.exe
 #>
 
 param(
@@ -24,37 +24,38 @@ $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 
-# 1) Python?
+# 1) Python present?
 $py = (Get-Command python -ErrorAction SilentlyContinue)
-if (-not $py) { throw "Не найден python в PATH. Установи Python 3 с python.org." }
+if (-not $py) { throw "python not found in PATH. Install Python 3 from python.org." }
 
-# 2) PyInstaller?
+# 2) PyInstaller present?
 python -c "import PyInstaller" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Ставлю PyInstaller..."
+    Write-Host "Installing PyInstaller..."
     python -m pip install --upgrade pip
     python -m pip install pyinstaller
 }
 
-# 3) сборка
+# 3) build
 $opts = @(
-    "--onefile",            # один exe
+    "--onefile",
     "--name", "guard",
-    "--uac-admin",          # запрашивать админа при запуске
+    "--uac-admin",
     "--clean", "--noconfirm"
 )
-if ($NoConsole) { $opts += "--noconsole" }      # без чёрного окна
+if ($NoConsole) { $opts += "--noconsole" }
 if ($Icon)      { $opts += @("--icon", $Icon) }
 
-Write-Host "Собираю guard.exe ..."
+Write-Host "Building guard.exe ..."
 python -m PyInstaller @opts "guard.py"
 
 $out = Join-Path $here "dist\guard.exe"
 if (Test-Path $out) {
-    Write-Host "`nГотово: $out"
-    Write-Host "Запуск: правый клик -> Запуск от имени администратора (или просто двойной клик — попросит UAC)."
-    Write-Host "ВНИМАНИЕ: антивирус может ругаться на свежий неподписанный exe (он правит реестр, ставит хуки, убивает процессы)."
-    Write-Host "Это ложное срабатывание эвристики. Добавь исключение Defender на папку guard или подпиши exe своим сертификатом."
+    Write-Host ""
+    Write-Host "Done: $out"
+    Write-Host "Run: right-click -> Run as administrator (or double-click, it will ask UAC)."
+    Write-Host "NOTE: antivirus may flag a fresh unsigned exe (it edits registry, sets hooks, kills processes)."
+    Write-Host "That is a heuristic false positive. Add a Defender exclusion for the guard folder, or sign the exe."
 } else {
-    throw "Сборка не создала dist\guard.exe — смотри вывод выше."
+    throw "Build did not produce dist\guard.exe - see output above."
 }
