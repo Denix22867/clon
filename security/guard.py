@@ -6,6 +6,8 @@ guard.py — единый защитный агент для Windows 10/11.
   * включает защиту Defender от шифрования (Controlled Folder Access) — нужен админ;
   * раскладывает canary-ловушки и при массовом шифровании блокирует/выключает ПК;
   * бережёт ключи безопасного режима (SafeBoot) и восстанавливает их;
+  * защищает среду восстановления WinRE: бэкап ReAgent.xml/Winre.wim, и если её
+    отключили (reagentc /disable) или стёрли — восстанавливает и включает обратно;
   * держит DisableTaskMgr/DisableRegistryTools в 0 и снимает BlockInput (анти-локер клавы);
   * паник-клавиша Ctrl+Alt+K закрывает активное полноэкранное окно-пугалку;
   * АДМИНСКИЙ "часовой": ловит полноэкранное безрамочное topmost-окно локера,
@@ -29,6 +31,7 @@ import ctypes
 import ctypes.wintypes as wt
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -40,6 +43,10 @@ kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 BASE = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(BASE, "guard.log")
 SAFEBOOT_BACKUP = os.path.join(BASE, "safeboot_backup.reg")
+WINDIR = os.environ.get("WINDIR", r"C:\Windows")
+WINRE_DIR = os.path.join(WINDIR, "System32", "Recovery")
+WINRE_BACKUP = os.path.join(BASE, "winre_backup")
+WINRE_INTERVAL = 5.0  # сек между проверками WinRE (reagentc медленный)
 
 # реакция при срабатывании ловушки: "lock" | "shutdown" | "alert"
 ON_TRIP = "lock"
@@ -227,6 +234,73 @@ def restore_safeboot() -> None:
 
 
 # =======================================================================
+#  ЗАЩИТА СРЕДЫ ВОССТАНОВЛЕНИЯ WinRE
+# =======================================================================
+def winre_status():
+    """Вернёт ('enabled'|'disabled'|'unknown', текст). Язык-агностично."""
+    r = subprocess.run(["reagentc", "/info"], capture_output=True, text=True,
+                       creationflags=0x08000000)
+    out = ((r.stdout or "") + (r.stderr or "")).lower()
+    if "disabled" in out or "отключен" in out:
+        return "disabled", out
+    if "enabled" in out or "включен" in out:
+        return "enabled", out
+    return "unknown", out
+
+
+def winre_backup() -> None:
+    """Сохраняет ReAgent.xml и Winre.wim, пока они на месте (нужен админ)."""
+    if not is_admin():
+        return
+    try:
+        os.makedirs(WINRE_BACKUP, exist_ok=True)
+        saved = []
+        for fn in ("ReAgent.xml", "Winre.wim"):
+            src = os.path.join(WINRE_DIR, fn)
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(WINRE_BACKUP, fn))
+                saved.append(fn)
+        if saved:
+            log("Бэкап WinRE обновлён: " + ", ".join(saved))
+        else:
+            log("WinRE: файлы ReAgent.xml/Winre.wim не найдены в System32\\Recovery "
+                "(возможно, образ на отдельном разделе восстановления).")
+    except OSError as e:
+        log("Бэкап WinRE не удался: %s" % e)
+
+
+def winre_protect() -> None:
+    """Если WinRE отключили/стёрли — восстановить файлы и включить обратно."""
+    if not is_admin():
+        return
+    status, _ = winre_status()
+    if status != "disabled":
+        return
+    log("ВНИМАНИЕ: WinRE ОТКЛЮЧЁН — восстанавливаю.")
+    # вернуть стёртые файлы из бэкапа
+    try:
+        os.makedirs(WINRE_DIR, exist_ok=True)
+        for fn in ("ReAgent.xml", "Winre.wim"):
+            bak = os.path.join(WINRE_BACKUP, fn)
+            dst = os.path.join(WINRE_DIR, fn)
+            if os.path.exists(bak) and not os.path.exists(dst):
+                shutil.copy2(bak, dst)
+                log("WinRE: восстановлен из бэкапа " + fn)
+    except OSError as e:
+        log("WinRE: восстановить файлы не вышло: %s" % e)
+    # включить снова
+    r = subprocess.run(["reagentc", "/enable"], capture_output=True, text=True,
+                       creationflags=0x08000000)
+    if r.returncode == 0:
+        log("WinRE снова включён (reagentc /enable).")
+    else:
+        log("WinRE: автоматически включить не удалось: "
+            + (r.stdout or r.stderr).strip()
+            + "  Если образ стёрт — восстанови через установочный носитель "
+              "(reagentc /setreimage /path <WinRE.wim>).")
+
+
+# =======================================================================
 #  АНТИ-БЛОКИРОВКА КЛАВИАТУРЫ / TASKMGR
 # =======================================================================
 def fix_keyboard_and_taskmgr() -> bool:
@@ -396,6 +470,7 @@ def main_loop() -> None:
     backup_safeboot()
     if not safeboot_ok():
         log("ВНИМАНИЕ: ключи SafeBoot повреждены на старте.")
+    winre_backup()
     expected = plant_canaries()
     if not register_panic_hotkey():
         log("Ctrl+Alt+K занята — паник-клавиша недоступна, остальное работает.")
@@ -403,6 +478,7 @@ def main_loop() -> None:
     msg = wt.MSG()
     WM_HOTKEY, WM_CLOSE = 0x0312, 0x0010
     last = 0.0
+    last_winre = 0.0
     while True:
         if user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
             if msg.message == WM_HOTKEY:
@@ -438,6 +514,10 @@ def main_loop() -> None:
                 log("SafeBoot повреждён — восстанавливаю.")
                 restore_safeboot()
             last = now
+
+        if now - last_winre >= WINRE_INTERVAL:
+            winre_protect()
+            last_winre = now
         time.sleep(0.1)
 
 
