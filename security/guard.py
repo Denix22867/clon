@@ -45,7 +45,12 @@ import winreg
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+# Папка для логов/отчётов/бэкапов: рядом с exe (в сборке) или со скриптом.
+# В --onefile __file__ указывает во временную распаковку, поэтому берём exe.
+if getattr(sys, "frozen", False):
+    BASE = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(BASE, "guard.log")
 SAFEBOOT_BACKUP = os.path.join(BASE, "safeboot_backup.reg")
 WINDIR = os.environ.get("WINDIR", r"C:\Windows")
@@ -105,9 +110,26 @@ def run_ps(cmd: str):
 # =======================================================================
 #  АВТОЗАГРУЗКА
 # =======================================================================
+FROZEN = getattr(sys, "frozen", False)  # True, если собрано PyInstaller в .exe
+
+
 def _python_exe() -> str:
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     return pyw if os.path.exists(pyw) else sys.executable
+
+
+def _launch_target_args():
+    """Чем и с какими аргументами стартовать guard (учитывает .exe-сборку)."""
+    if FROZEN:
+        # собранный exe — запускаем его напрямую
+        return sys.executable, "--no-install", os.path.dirname(sys.executable)
+    script = os.path.abspath(__file__)
+    return _python_exe(), f'"{script}" --no-install', os.path.dirname(script)
+
+
+def _self_path() -> str:
+    """Путь к самому guard (exe в сборке, иначе .py) — для самоисключения."""
+    return os.path.normcase(sys.executable if FROZEN else os.path.abspath(__file__))
 
 
 def startup_shortcut() -> str:
@@ -115,13 +137,13 @@ def startup_shortcut() -> str:
 
 
 def install_autostart() -> None:
-    script = os.path.abspath(__file__)
+    target, args, workdir = _launch_target_args()
     lnk = startup_shortcut()
     ps = (
         f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
-        f"$s.TargetPath='{_python_exe()}';"
-        f"$s.Arguments='\"{script}\" --no-install';"
-        f"$s.WorkingDirectory='{os.path.dirname(script)}';"
+        f"$s.TargetPath='{target}';"
+        f"$s.Arguments='{args}';"
+        f"$s.WorkingDirectory='{workdir}';"
         f"$s.Save()"
     )
     run_ps(ps)
@@ -143,11 +165,13 @@ def install_system_task() -> None:
     if not is_admin():
         log("Для SYSTEM-задачи нужен запуск от администратора.")
         return
-    script = os.path.abspath(__file__)
+    if FROZEN:
+        tr = f'"{sys.executable}" --no-install'
+    else:
+        tr = f'"{_python_exe()}" "{os.path.abspath(__file__)}" --no-install'
     subprocess.run(
         ["schtasks", "/Create", "/TN", "GuardSentinel", "/SC", "ONSTART",
-         "/RU", "SYSTEM", "/RL", "HIGHEST",
-         "/TR", f'"{_python_exe()}" "{script}" --no-install', "/F"],
+         "/RU", "SYSTEM", "/RL", "HIGHEST", "/TR", tr, "/F"],
         capture_output=True, creationflags=0x08000000)
     log("Установлена SYSTEM-задача GuardSentinel (старт при загрузке).")
 
@@ -533,8 +557,7 @@ def purge_persistence(image_path: str) -> dict:
     # удалить сами файлы копий (после kill)
     for p in copy_paths:
         try:
-            if os.path.exists(p) and os.path.normcase(p) != os.path.normcase(
-                    os.path.abspath(__file__)):
+            if os.path.exists(p) and os.path.normcase(p) != _self_path():
                 os.remove(p)
                 log(f"Удалён файл локера: {p}")
                 acts["files"].append(p)
