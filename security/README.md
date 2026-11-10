@@ -58,6 +58,35 @@ python guard.py --uninstall       # снять автозапуск
 ```
 Реакция на шифрование настраивается в начале файла: `ON_TRIP = "lock" | "shutdown" | "alert"`.
 
+## Пример: разбор HollyChecker.exe (WinLocker)
+
+Образец проанализирован в песочнице Triage (score 7/10). **Это скрин-локер, а не
+настоящий шифровальщик** — файловая активность показала, что он сбросил только свою
+PyInstaller-начинку в `Temp\_MEI...\`, зашифрованных файлов и записок-вымогателей нет.
+Надпись «Ваши файлы зашифрованы» — запугивание.
+
+Реальное поведение и чем закрывается:
+
+| Индикатор | Защита |
+|---|---|
+| Запуск из `AppData\Local\Temp\HollyChecker.exe` | **AppLocker** блокирует (Temp не разрешён) |
+| Копия в `AppData\Roaming\WindowsUpdateService\` | guard: kill по имени + удаление копии |
+| `Run` + `RunOnce` = `WinLockerService` | guard: чистка Run/RunOnce (HKCU+HKLM) |
+| Файл в Startup | guard: чистка Startup |
+| Задача schtasks `WinLockerService` (ONLOGON) | guard: удаление задачи |
+| Полноэкранное окно + `SetWindowsHookEx` | guard: «часовой» убивает процесс → хуки спадают |
+| `DisableTaskMgr`, `BlockInput` | guard: сброс политик + BlockInput(False) |
+
+IOC (для блок-листов/поиска):
+- SHA-256: `548d7d990942c8c0b48432b59d7e8963b927d080a5ea4950146fa5c54ff6e066`
+- Пути: `…\AppData\Roaming\WindowsUpdateService\HollyChecker.exe`
+- Реестр: `…\CurrentVersion\Run(Once)\WinLockerService`
+- Задача: `WinLockerService`
+- Telegram в тексте: `@WinLockerHollyChecker`
+
+> Снять такой локер вручную: безопасный режим → удалить копии и записи автозапуска выше,
+> либо дать поработать guard от администратора. Настоящего шифрования тут нет.
+
 ## Честные границы
 - `guard.py` — агент пользовательского режима: он **не** перехватывает запись в файлы
   драйвером и **не** даёт абсолютной гарантии. Надёжную блокировку дают слои 2–3 (ядро).

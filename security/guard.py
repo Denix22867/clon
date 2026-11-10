@@ -69,6 +69,8 @@ POLICY_NAMES = ("DisableTaskMgr", "DisableRegistryTools",
 RUN_PATHS = [
     (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
     (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+    (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+    (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
 ]
 STARTUP_DIR = os.path.join(os.environ.get("APPDATA", ""),
                            r"Microsoft\Windows\Start Menu\Programs\Startup")
@@ -445,12 +447,22 @@ def kill_tree(pid: int) -> None:
                    capture_output=True, creationflags=0x08000000)
 
 
+_PATH_RE = re.compile(r'([A-Za-z]:\\[^"\r\n]+?\.exe)', re.IGNORECASE)
+
+
 def purge_persistence(image_path: str) -> None:
+    """Чистит ВСЮ персистентность по имени файла локера: Run/RunOnce (HKCU+HKLM),
+    Startup, задачи schtasks — и находит/удаляет ВТОРУЮ копию (напр. в Roaming),
+    затем убивает все запущенные копии по имени процесса."""
     if not image_path:
         return
-    target = os.path.normcase(image_path)
-    base = os.path.basename(target).lower()
-    # ключи Run
+    base = os.path.basename(os.path.normcase(image_path)).lower()
+    if not base.endswith(".exe"):
+        base += ""  # на всякий случай
+    copy_paths = {os.path.normcase(image_path)}  # все известные пути копий
+
+    # ключи Run / RunOnce — матчим по ИМЕНИ файла, а не по конкретному пути,
+    # чтобы поймать и Temp-, и Roaming-копию
     for root, path in RUN_PATHS:
         try:
             k = winreg.OpenKey(root, path, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE)
@@ -460,15 +472,18 @@ def purge_persistence(image_path: str) -> None:
                     name, val, _ = winreg.EnumValue(k, i)
                 except OSError:
                     break
-                if isinstance(val, str) and target in os.path.normcase(val):
+                if isinstance(val, str) and base in val.lower():
                     to_del.append(name)
+                    for m in _PATH_RE.findall(val):
+                        copy_paths.add(os.path.normcase(m))
                 i += 1
             for name in to_del:
                 winreg.DeleteValue(k, name)
-                log(f"Удалён автозапуск Run: {name}")
+                log(f"Удалён автозапуск {path.rsplit(chr(92),1)[-1]}: {name}")
             winreg.CloseKey(k)
         except OSError:
             pass
+
     # файлы Startup
     try:
         for fn in os.listdir(STARTUP_DIR):
@@ -477,13 +492,17 @@ def purge_persistence(image_path: str) -> None:
             fp = os.path.join(STARTUP_DIR, fn)
             try:
                 with open(fp, "r", errors="ignore") as f:
-                    if base in f.read().lower():
-                        os.remove(fp)
-                        log(f"Удалён файл автозапуска: {fn}")
+                    content = f.read()
+                if base in content.lower():
+                    for m in _PATH_RE.findall(content):
+                        copy_paths.add(os.path.normcase(m))
+                    os.remove(fp)
+                    log(f"Удалён файл автозапуска: {fn}")
             except OSError:
                 pass
     except OSError:
         pass
+
     # задачи schtasks
     r = subprocess.run(["schtasks", "/Query", "/FO", "LIST", "/V"],
                        capture_output=True, text=True, creationflags=0x08000000)
@@ -494,9 +513,29 @@ def purge_persistence(image_path: str) -> None:
             cur = s.split(":", 1)[1].strip()
         elif s.startswith("Task To Run:") and cur and cur.strip("\\") != "GuardSentinel":
             if base in s.lower():
+                for m in _PATH_RE.findall(s):
+                    copy_paths.add(os.path.normcase(m))
                 subprocess.run(["schtasks", "/Delete", "/TN", cur, "/F"],
                                capture_output=True, creationflags=0x08000000)
                 log(f"Удалена задача автозапуска: {cur}")
+
+    # убить ВСЕ запущенные копии по имени процесса (и Temp, и Roaming, и watchdog)
+    subprocess.run(["taskkill", "/F", "/T", "/IM", os.path.basename(image_path)],
+                   capture_output=True, creationflags=0x08000000)
+
+    # удалить сами файлы копий (после kill)
+    for p in copy_paths:
+        try:
+            if os.path.exists(p) and os.path.normcase(p) != os.path.normcase(
+                    os.path.abspath(__file__)):
+                os.remove(p)
+                log(f"Удалён файл локера: {p}")
+                # попробовать убрать папку-маскировку WindowsUpdateService, если пуста
+                d = os.path.dirname(p)
+                if d.lower().endswith("windowsupdateservice") and not os.listdir(d):
+                    os.rmdir(d)
+        except OSError:
+            pass
 
 
 # =======================================================================
