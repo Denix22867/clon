@@ -8,6 +8,8 @@ guard.py — единый защитный агент для Windows 10/11.
   * бережёт ключи безопасного режима (SafeBoot) и восстанавливает их;
   * защищает среду восстановления WinRE: бэкап ReAgent.xml/Winre.wim, и если её
     отключили (reagentc /disable) или стёрли — восстанавливает и включает обратно;
+  * следит за теневыми копиями (VSS): поднимает отключённую службу и бьёт тревогу,
+    если все теневые копии вдруг удалили (типичный шаг перед шифрованием);
   * держит DisableTaskMgr/DisableRegistryTools в 0 и снимает BlockInput (анти-локер клавы);
   * паник-клавиша Ctrl+Alt+K закрывает активное полноэкранное окно-пугалку;
   * АДМИНСКИЙ "часовой": ловит полноэкранное безрамочное topmost-окно локера,
@@ -31,6 +33,7 @@ import ctypes
 import ctypes.wintypes as wt
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -47,6 +50,7 @@ WINDIR = os.environ.get("WINDIR", r"C:\Windows")
 WINRE_DIR = os.path.join(WINDIR, "System32", "Recovery")
 WINRE_BACKUP = os.path.join(BASE, "winre_backup")
 WINRE_INTERVAL = 5.0  # сек между проверками WinRE (reagentc медленный)
+VSS_INTERVAL = 5.0    # сек между проверками теневых копий
 
 # реакция при срабатывании ловушки: "lock" | "shutdown" | "alert"
 ON_TRIP = "lock"
@@ -301,6 +305,56 @@ def winre_protect() -> None:
 
 
 # =======================================================================
+#  МОНИТОРИНГ ТЕНЕВЫХ КОПИЙ (VSS)
+# =======================================================================
+# Шифровальщики почти всегда удаляют теневые копии перед шифрованием
+# (vssadmin delete shadows /all, wmic shadowcopy delete, wbadmin delete catalog,
+#  отключение службы VSS), чтобы отрезать откат. Резкое исчезновение всех
+# теневых копий — сильный ранний признак атаки.
+_vss_seen = 0  # максимум теневых копий, что мы видели (была защита)
+
+
+def vss_count() -> int:
+    """Число теневых копий (по GUID). Нужен админ; иначе -1."""
+    r = subprocess.run(["vssadmin", "list", "shadows"],
+                       capture_output=True, text=True, creationflags=0x08000000)
+    out = (r.stdout or "") + (r.stderr or "")
+    if "administrator" in out.lower() or "администратора" in out.lower():
+        return -1
+    return len(re.findall(r"\{[0-9A-Fa-f-]{36}\}", out))
+
+
+def ensure_vss_service() -> None:
+    """Если службу VSS отключили — вернуть в ручной запуск и поднять."""
+    if not is_admin():
+        return
+    q = subprocess.run(["sc", "qc", "VSS"], capture_output=True, text=True,
+                       creationflags=0x08000000)
+    if "DISABLED" in (q.stdout or "").upper():
+        subprocess.run(["sc", "config", "VSS", "start=", "demand"],
+                       capture_output=True, creationflags=0x08000000)
+        subprocess.run(["sc", "start", "VSS"],
+                       capture_output=True, creationflags=0x08000000)
+        log("Служба VSS была отключена — возвращена в ручной запуск.")
+
+
+def vss_protect() -> None:
+    """Следит за резким удалением всех теневых копий."""
+    global _vss_seen
+    if not is_admin():
+        return
+    ensure_vss_service()
+    cnt = vss_count()
+    if cnt < 0:
+        return
+    if cnt > _vss_seen:
+        _vss_seen = cnt
+    if _vss_seen > 0 and cnt == 0:
+        react("удалены ВСЕ теневые копии (VSS) — типичный шаг перед шифрованием")
+        _vss_seen = 0  # чтобы не зациклить тревогу
+
+
+# =======================================================================
 #  АНТИ-БЛОКИРОВКА КЛАВИАТУРЫ / TASKMGR
 # =======================================================================
 def fix_keyboard_and_taskmgr() -> bool:
@@ -479,6 +533,7 @@ def main_loop() -> None:
     WM_HOTKEY, WM_CLOSE = 0x0312, 0x0010
     last = 0.0
     last_winre = 0.0
+    last_vss = 0.0
     while True:
         if user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
             if msg.message == WM_HOTKEY:
@@ -518,6 +573,10 @@ def main_loop() -> None:
         if now - last_winre >= WINRE_INTERVAL:
             winre_protect()
             last_winre = now
+
+        if now - last_vss >= VSS_INTERVAL:
+            vss_protect()
+            last_vss = now
         time.sleep(0.1)
 
 
