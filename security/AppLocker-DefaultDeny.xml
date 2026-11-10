@@ -1,0 +1,81 @@
+<AppLockerPolicy Version="1">
+  <!--
+    Default-deny AppLocker policy for Windows 10/11.
+    Разрешает запуск только из системных каталогов и Program Files,
+    плюс всё для администраторов. Любой .exe/.msi/скрипт из
+    Temp / Downloads / AppData / USB будет ЗАБЛОКИРОВАН до запуска кода.
+
+    ВАЖНО: сначала применяй в режиме AuditOnly (см. apply-applocker.ps1),
+    проверь журнал, и только потом переключай на Enabled.
+  -->
+
+  <!-- Исполняемые файлы (.exe, .com) -->
+  <RuleCollection Type="Exe" EnforcementMode="AuditOnly">
+    <FilePathRule Id="921cc481-6e17-4653-8f75-050b80acca20"
+                  Name="(Default) Все файлы в %WINDIR%"
+                  Description="Разрешить всем запуск из папки Windows"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions><FilePathCondition Path="%WINDIR%\*"/></Conditions>
+    </FilePathRule>
+    <FilePathRule Id="a61c8b2c-a319-4cd0-9690-d2177cad7b51"
+                  Name="(Default) Все файлы в %PROGRAMFILES%"
+                  Description="Разрешить всем запуск из Program Files"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions><FilePathCondition Path="%PROGRAMFILES%\*"/></Conditions>
+    </FilePathRule>
+    <FilePathRule Id="fd686d83-a829-4351-8ff4-27c7de5755d2"
+                  Name="(Default) Всё для администраторов"
+                  Description="Администраторам разрешено всё"
+                  UserOrGroupSid="S-1-5-32-544" Action="Allow">
+      <Conditions><FilePathCondition Path="*"/></Conditions>
+    </FilePathRule>
+  </RuleCollection>
+
+  <!-- Установщики Windows (.msi, .msp) -->
+  <RuleCollection Type="Msi" EnforcementMode="AuditOnly">
+    <FilePathRule Id="b7af7102-efde-4369-8a89-7a6a392d1473"
+                  Name="(Default) Все подписанные установщики"
+                  Description="Разрешить всем запуск цифрово подписанных .msi"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions>
+        <FilePublisherCondition PublisherName="*" ProductName="*" BinaryName="*">
+          <BinaryVersionRange LowSection="*" HighSection="*"/>
+        </FilePublisherCondition>
+      </Conditions>
+    </FilePathRule>
+    <FilePathRule Id="5b290184-345a-4453-b184-45305f6d9a54"
+                  Name="(Default) Все установщики в %WINDIR%\Installer"
+                  Description="Разрешить всем запуск из каталога установщика"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions><FilePathCondition Path="%WINDIR%\Installer\*"/></Conditions>
+    </FilePathRule>
+    <FilePathRule Id="64ad46ff-0d71-4fa0-a30b-3f3d30c5433d"
+                  Name="(Default) Всё для администраторов"
+                  Description="Администраторам разрешено всё"
+                  UserOrGroupSid="S-1-5-32-544" Action="Allow">
+      <Conditions><FilePathCondition Path="*"/></Conditions>
+    </FilePathRule>
+  </RuleCollection>
+
+  <!-- Скрипты (.ps1, .bat, .cmd, .vbs, .js) -->
+  <RuleCollection Type="Script" EnforcementMode="AuditOnly">
+    <FilePathRule Id="06dce67b-934c-454f-a263-2515c8796a5d"
+                  Name="(Default) Все скрипты в %WINDIR%"
+                  Description="Разрешить всем скрипты из папки Windows"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions><FilePathCondition Path="%WINDIR%\*"/></Conditions>
+    </FilePathRule>
+    <FilePathRule Id="9428c672-5fc3-47f4-808a-a0011f36dd2c"
+                  Name="(Default) Все скрипты в %PROGRAMFILES%"
+                  Description="Разрешить всем скрипты из Program Files"
+                  UserOrGroupSid="S-1-1-0" Action="Allow">
+      <Conditions><FilePathCondition Path="%PROGRAMFILES%\*"/></Conditions>
+    </FilePathRule>
+    <FilePathRule Id="ed97d0cb-15ff-430f-b82c-8d7832957725"
+                  Name="(Default) Всё для администраторов"
+                  Description="Администраторам разрешено всё"
+                  UserOrGroupSid="S-1-5-32-544" Action="Allow">
+      <Conditions><FilePathCondition Path="*"/></Conditions>
+    </FilePathRule>
+  </RuleCollection>
+</AppLockerPolicy>
